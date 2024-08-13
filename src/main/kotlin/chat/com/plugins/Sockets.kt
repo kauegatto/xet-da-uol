@@ -8,13 +8,16 @@ import io.ktor.server.application.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
+import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.time.Duration
 import java.util.*
 
 fun Application.configureSockets() {
     val jsonConverter = KotlinxWebsocketSerializationConverter(Json)
-    val senderBySession = Collections.synchronizedMap<Nickname, WebSocketSession>(HashMap())
     install(WebSockets) {
         contentConverter = jsonConverter
         pingPeriod = Duration.ofSeconds(15)
@@ -23,19 +26,21 @@ fun Application.configureSockets() {
         masking = false
     }
     routing {
+        val messageResponseFlow = MutableSharedFlow<Message>()
+        val sharedFlow = messageResponseFlow.asSharedFlow()
+
+        // https://github.com/ktorio/ktor-documentation/tree/2.3.12/codeSnippets/snippets/server-websockets-sharedflow
         webSocket("/ws") { // websocketSession
-            for (frame in incoming) {
-                val message = jsonConverter.deserialize<Message>(frame)
-
-                if(!senderBySession.containsKey(message.sender)) {
-                    senderBySession[message.sender] = this
+            val job = launch {
+                sharedFlow.collect { message ->
+                    sendSerialized(message)
                 }
-
-                val frameMessage: Frame = jsonConverter.serialize(message)
-                senderBySession
-                    .filterNot { sessionEntry -> sessionEntry.key == message.sender }
-                    .forEach { it.value.send(frameMessage) }
             }
+            incoming.consumeEach { frame ->
+                val message = jsonConverter.deserialize<Message>(frame)
+                messageResponseFlow.emit(message)
+            } // could also runCatching
+            job.cancel()
         }
     }
 }

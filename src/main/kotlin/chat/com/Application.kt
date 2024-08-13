@@ -1,6 +1,5 @@
 package chat.com
 
-import chat.com.plugins.configureRouting
 import chat.com.plugins.configureSerialization
 import chat.com.plugins.configureSockets
 import io.ktor.server.application.*
@@ -12,5 +11,4 @@ fun main(args: Array<String>) {
 fun Application.module() {
     configureSockets()
     configureSerialization()
-    configureRouting()
 }

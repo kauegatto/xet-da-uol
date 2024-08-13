@@ -1,4 +1,4 @@
-package example.com.plugins
+package chat.com.plugins
 
 import io.ktor.server.application.*
 

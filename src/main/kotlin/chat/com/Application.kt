@@ -1,6 +1,8 @@
-package example.com
+package chat.com
 
-import example.com.plugins.*
+import chat.com.plugins.configureRouting
+import chat.com.plugins.configureSerialization
+import chat.com.plugins.configureSockets
 import io.ktor.server.application.*
 
 fun main(args: Array<String>) {

@@ -1,14 +1,19 @@
 package chat.com.plugins
 
+import chat.com.Model.Message
+import io.ktor.serialization.*
+import io.ktor.serialization.kotlinx.*
 import io.ktor.server.application.*
-import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
+import kotlinx.serialization.json.Json
 import java.time.Duration
 
 fun Application.configureSockets() {
+    val jsonConverter = KotlinxWebsocketSerializationConverter(Json)
     install(WebSockets) {
+        contentConverter = jsonConverter
         pingPeriod = Duration.ofSeconds(15)
         timeout = Duration.ofSeconds(15)
         maxFrameSize = Long.MAX_VALUE
@@ -17,13 +22,9 @@ fun Application.configureSockets() {
     routing {
         webSocket("/ws") { // websocketSession
             for (frame in incoming) {
-                if (frame is Frame.Text) {
-                    val text = frame.readText()
-                    outgoing.send(Frame.Text("YOU SAID: $text"))
-                    if (text.equals("bye", ignoreCase = true)) {
-                        close(CloseReason(CloseReason.Codes.NORMAL, "Client said BYE"))
-                    }
-                }
+                val message = jsonConverter.deserialize<Message>(frame)
+                val frame: Frame = jsonConverter.serialize(message)
+                outgoing.send(frame)
             }
         }
     }

@@ -1,7 +1,6 @@
 package chat.com.Infrastructure.plugins
 
 import chat.com.Domain.Model.*
-import chat.com.Domain.Service.RoomService
 import io.ktor.serialization.*
 import io.ktor.serialization.kotlinx.*
 import io.ktor.server.application.*
@@ -12,7 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.time.Duration
 
-fun Application.configureSockets(roomService: RoomService) {
+fun Application.configureSockets(){
     val jsonConverter = KotlinxWebsocketSerializationConverter(Json {
         classDiscriminator = "type" // Specifies the discriminator field for polymorphic messages
     })
@@ -31,8 +30,8 @@ fun Application.configureSockets(roomService: RoomService) {
                 runCatching {
                     val baseMessage = jsonConverter.deserialize<BaseMessage>(frame)
                     when (baseMessage) {
-                        is JoinMessage -> handleJoinMessage(baseMessage, roomService)
-                        is Message -> handleMessage(roomService, baseMessage)
+                        is JoinMessage -> handleJoinMessage(baseMessage)
+                        is Message -> handleMessage(baseMessage)
                     }
                 }.onFailure {
                     send("Invalid message type")
@@ -43,24 +42,24 @@ fun Application.configureSockets(roomService: RoomService) {
 }
 
 private suspend fun DefaultWebSocketServerSession.handleMessage(
-    roomService: RoomService,
     baseMessage: Message
 ) {
-    if (!roomService.exists(baseMessage.roomId)) {
-        send("Room ${baseMessage.roomId} was not found")
+    val room = Room.getById(baseMessage.roomId)
+    if(room == null) {
+        send("Room of id ${baseMessage.roomId} not found!");
+        return
     }
-    if (!roomService.isUserOnRoom(baseMessage.roomId, baseMessage.sender)) {
+    if (room.isUserOnRoom(baseMessage.sender)) {
         send("User ${baseMessage.sender} was not found on room ${baseMessage.roomId}")
     }
-    roomService.getOrCreateRoom(baseMessage.roomId).broadcastMessage(baseMessage)
+    room.broadcastMessage(baseMessage)
 }
 
 private suspend fun DefaultWebSocketServerSession.handleJoinMessage(
     message: JoinMessage,
-    roomService: RoomService,
 ) {
     val roomId = message.roomId
-    val connectedRoom = roomService.getOrCreateRoom(roomId)
+    val connectedRoom = Room.getOrCreateRoom(roomId)
     connectedRoom.addUser(
         User(
             nickname = message.nickname

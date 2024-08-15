@@ -1,7 +1,7 @@
 package chat.com
 
-import chat.com.plugins.configureSerialization
-import chat.com.plugins.configureSockets
+import chat.com.Infrastructure.plugins.configureSerialization
+import chat.com.Infrastructure.plugins.configureSockets
 import io.ktor.server.application.*
 
 fun main(args: Array<String>) {

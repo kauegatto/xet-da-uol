@@ -1,4 +1,4 @@
-package chat.com.Model
+package chat.com.Domain.Model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

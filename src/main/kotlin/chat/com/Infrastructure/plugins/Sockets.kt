@@ -1,6 +1,7 @@
-package chat.com.plugins
+package chat.com.Infrastructure.plugins
 
-import chat.com.Model.*
+import chat.com.Domain.Model.*
+import chat.com.Domain.Service.RoomService
 import io.ktor.serialization.*
 import io.ktor.serialization.kotlinx.*
 import io.ktor.server.application.*
@@ -9,17 +10,13 @@ import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
 import java.time.Duration
-import java.util.*
-import kotlin.collections.HashMap
 
-fun Application.configureSockets() {
+fun Application.configureSockets(roomService: RoomService) {
     val jsonConverter = KotlinxWebsocketSerializationConverter(Json {
         classDiscriminator = "type" // Specifies the discriminator field for polymorphic messages
     })
 
-    val rooms = Collections.synchronizedMap<String, Room>(HashMap())
     install(WebSockets) {
         contentConverter = jsonConverter
         pingPeriod = Duration.ofSeconds(15)
@@ -34,8 +31,8 @@ fun Application.configureSockets() {
                 runCatching {
                     val baseMessage = jsonConverter.deserialize<BaseMessage>(frame)
                     when (baseMessage) {
-                        is JoinMessage -> handleJoinMessage(baseMessage, rooms)
-                        is Message -> handleMessage(rooms, baseMessage)
+                        is JoinMessage -> handleJoinMessage(baseMessage, roomService)
+                        is Message -> handleMessage(roomService, baseMessage)
                     }
                 }.onFailure {
                     send("Invalid message type")
@@ -46,36 +43,31 @@ fun Application.configureSockets() {
 }
 
 private suspend fun DefaultWebSocketServerSession.handleMessage(
-    rooms: MutableMap<String, Room>,
+    roomService: RoomService,
     baseMessage: Message
 ) {
-    if (!rooms.containsKey(baseMessage.roomId)) {
+    if (!roomService.exists(baseMessage.roomId)) {
         send("Room ${baseMessage.roomId} was not found")
     }
-    if (!rooms[baseMessage.roomId]!!.userToSessions.containsKey(baseMessage.sender)) {
+    if (!roomService.isUserOnRoom(baseMessage.roomId, baseMessage.sender)) {
         send("User ${baseMessage.sender} was not found on room ${baseMessage.roomId}")
     }
-    rooms[baseMessage.roomId]!!.messageFlow.emit(baseMessage)
+    roomService.getOrCreateRoom(baseMessage.roomId).broadcastMessage(baseMessage)
 }
 
 private suspend fun DefaultWebSocketServerSession.handleJoinMessage(
     message: JoinMessage,
-    rooms: MutableMap<String, Room>,
+    roomService: RoomService,
 ) {
     val roomId = message.roomId
-    if (!rooms.containsKey(roomId)) {
-        createRoom(rooms, roomId)
-    }
-
-    val connectedRoom = rooms[roomId]!!
-    connectedRoom.userToSessions[message.nickname] = this
+    val connectedRoom = roomService.getOrCreateRoom(roomId)
+    connectedRoom.addUser(
+        User(
+            nickname = message.nickname
+        )
+    )
     startListeningToRoomFlow(connectedRoom)
     send("Connected to room $roomId")
-}
-
-private fun createRoom(rooms: MutableMap<String, Room>, roomId: String) {
-    rooms[roomId] = Room(roomId, mutableMapOf())
-    println("Room $roomId created")
 }
 
 private fun DefaultWebSocketServerSession.startListeningToRoomFlow(connectedRoom: Room) = launch {

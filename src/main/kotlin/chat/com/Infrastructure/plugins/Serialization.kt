@@ -1,4 +1,4 @@
-package chat.com.plugins
+package chat.com.Infrastructure.plugins
 
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
